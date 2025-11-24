@@ -8,6 +8,7 @@ import type {
 } from '$lib/types';
 import { SupabaseService } from '$lib/services/supabaseService';
 import { CacheService } from '$lib/services/cacheService';
+import { accelerometerService } from '$lib/services/accelerometerService.svelte';
 
 /**
  * Store global del juego usando Svelte 5 runes
@@ -355,6 +356,9 @@ class GameStore {
                 this.respuestasPasadas
             );
         }
+
+        // Reproducir sonido de fin de juego
+        accelerometerService.playSoundGameOver();
 
         this.estado = 'resultados';
     }

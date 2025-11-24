@@ -97,6 +97,7 @@
 	}
 
 	onMount(() => {
+		window.scrollTo(0, 0);
 		checkOrientation();
 		window.addEventListener("resize", checkOrientation);
 		inicializarAcelerometro();
@@ -268,8 +269,9 @@
 		min-height: 100vh;
 		display: flex;
 		align-items: center;
-		justify-content: center;
+		justify-content: flex-start;
 		padding: var(--spacing-md);
+		padding-top: var(--spacing-2xl);
 	}
 
 	/* Advertencia de orientación */
