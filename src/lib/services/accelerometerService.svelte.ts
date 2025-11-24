@@ -25,9 +25,9 @@ export class AccelerometerService {
 
     // Posición Neutral (Frente): ~90° (Vertical)
     // Hacia Arriba (Correcto): < 65° (Mirando un poco al techo)
-    // Hacia Abajo (Pasar): > 115° (Mirando un poco al suelo)
+    // Hacia Abajo (Pasar): > 100° (Mirando un poco al suelo) o Beta > 140°
     private readonly thresholdUp = 65;
-    private readonly thresholdDown = 115;
+    private readonly thresholdDown = 145;
     private readonly gammaMax = 60; // Más flexible lateralmente
 
     /**
@@ -241,14 +241,11 @@ export class AccelerometerService {
             return;
         }
 
-        // Validar que el teléfono no esté muy chueco de lado (Beta debe ser bajo)
-        if (absBeta > 45) return;
-
         // DETECCIÓN DE GESTOS (Modo Landscape / Manos en extremos)
 
         // ARRIBA / CORRECTO (Mirando al techo / Face Up)
-        // Gamma se acerca a 0°
-        if (absGamma < this.thresholdUp) {
+        // Gamma se acerca a 0° Y Beta es bajo (no está de cabeza)
+        if (absGamma < this.thresholdUp && absBeta < 45) {
             this.lastTriggerTime = now;
             this.isWaitingForNeutral = true;
             console.log(`⬆️ CORRECTO detectado (Gamma: ${gamma.toFixed(1)}°)`);
@@ -258,11 +255,12 @@ export class AccelerometerService {
             this.callback('up');
         }
         // ABAJO / PASAR (Mirando al suelo / Face Down)
-        // Gamma se acerca a 180°
-        else if (absGamma > this.thresholdDown) {
+        // Gamma se acerca a 180° O Beta se invierte (Face Down)
+        // Se añade validación (absBeta < 45) para evitar falsos positivos al mover horizontalmente
+        else if ((absGamma > this.thresholdDown && absBeta < 45) || absBeta > 165) {
             this.lastTriggerTime = now;
             this.isWaitingForNeutral = true;
-            console.log(`⬇️ PASAR detectado (Gamma: ${gamma.toFixed(1)}°)`);
+            console.log(`⬇️ PASAR detectado (Gamma: ${gamma.toFixed(1)}°, Beta: ${beta.toFixed(1)}°)`);
 
             this.playSoundSkip();
             this.vibrate(50);
