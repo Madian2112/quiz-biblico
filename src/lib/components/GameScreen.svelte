@@ -128,21 +128,6 @@
 						>{formatearTiempo(gameStore.tiempoRestante)}</span
 					>
 				</div>
-
-				<div class="stat-item">
-					<CheckCircle size={20} />
-					<span class="stat-value"
-						>{gameStore.respuestasCorrectas}</span
-					>
-				</div>
-
-				<div class="stat-item">
-					<span class="stat-label">Pregunta</span>
-					<span class="stat-value"
-						>{gameStore.preguntaActualIndex + 1} / {gameStore
-							.preguntas.length}</span
-					>
-				</div>
 			</div>
 
 			<!-- Pregunta actual -->
@@ -153,17 +138,6 @@
 					class:animate-down={animacionDireccion === "down"}
 				>
 					<div class="pregunta-card card-glass">
-						<div class="pregunta-meta">
-							<span class="badge badge-primary"
-								>{gameStore.preguntaActual.tema_nombre}</span
-							>
-							{#if gameStore.preguntaActual.versiculo_especifico}
-								<span class="badge badge-success"
-									>{gameStore.preguntaActual
-										.versiculo_especifico}</span
-								>
-							{/if}
-						</div>
 
 						<h2 class="pregunta-texto">
 							{gameStore.preguntaActual.texto_pregunta}
@@ -176,51 +150,6 @@
 							</p>
 						</div>
 					</div>
-
-					<!-- Indicadores de dirección -->
-					<div class="direccion-indicadores">
-						<div
-							class="indicador indicador-arriba"
-							class:active={animacionDireccion === "up"}
-						>
-							<ArrowUp size={32} />
-							<span>Correcto</span>
-						</div>
-						<div
-							class="indicador indicador-abajo"
-							class:active={animacionDireccion === "down"}
-						>
-							<ArrowDown size={32} />
-							<span>Pasar</span>
-						</div>
-					</div>
-				</div>
-			{/if}
-
-			<!-- Controles táctiles (fallback) -->
-			{#if usarControlesTactiles}
-				<div class="controles-tactiles">
-					<button
-						class="btn-tactil btn-correcto"
-						onclick={handleTactilCorrecto}
-					>
-						<ArrowUp size={32} />
-						<span>Correcto</span>
-					</button>
-					<button
-						class="btn-tactil btn-pasar"
-						onclick={handleTactilPasar}
-					>
-						<ArrowDown size={32} />
-						<span>Pasar</span>
-					</button>
-				</div>
-			{:else}
-				<div class="instrucciones">
-					<p>
-						Inclina el dispositivo hacia arriba o abajo para
-						responder
-					</p>
 				</div>
 			{/if}
 
