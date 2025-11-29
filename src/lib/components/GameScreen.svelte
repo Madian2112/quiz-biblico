@@ -6,6 +6,7 @@
 		ArrowDown,
 		Timer,
 		CheckCircle,
+		XCircle,
 		Smartphone,
 	} from "lucide-svelte";
 	import { onMount, onDestroy } from "svelte";
@@ -15,16 +16,61 @@
 	let usarControlesTactiles = $state(false);
 	let animacionDireccion = $state<"up" | "down" | null>(null);
 
+	// Estados para el inicio del juego
+	let conteoRegresivo = $state<number | null>(null); // null = no iniciado, >0 = contando
+	let juegoActivo = $state(false); // true = ya se puede jugar
+
 	// Detectar orientación
 	function checkOrientation() {
+		const wasLandscape = isLandscape;
 		isLandscape = window.innerWidth > window.innerHeight;
+
+		// Si cambiamos a landscape y el juego no ha iniciado, comenzar conteo
+		if (
+			isLandscape &&
+			!wasLandscape &&
+			!juegoActivo &&
+			conteoRegresivo === null
+		) {
+			iniciarConteo();
+		}
+	}
+
+	async function iniciarConteo() {
+		// Asegurar permisos primero si es necesario (aunque idealmente ya se pidieron)
+		// Si no hay permisos y no es táctil, pedirlos podría interrumpir,
+		// asumimos que el flujo normal ya manejó esto o lo manejará.
+
+		conteoRegresivo = 5;
+
+		const intervalo = setInterval(() => {
+			if (conteoRegresivo !== null && conteoRegresivo > 0) {
+				accelerometerService.playSoundCountdown(conteoRegresivo === 1);
+				conteoRegresivo--;
+			}
+
+			if (conteoRegresivo === 0) {
+				clearInterval(intervalo);
+				conteoRegresivo = null;
+				comenzarJuego();
+			}
+		}, 1000);
+
+		// Primer beep inmediato
+		accelerometerService.playSoundCountdown(false);
+	}
+
+	function comenzarJuego() {
+		juegoActivo = true;
+		inicializarAcelerometro();
+		// Aquí podrías iniciar el timer del store si no se inicia solo
 	}
 
 	// Manejar respuesta del acelerómetro
 	function handleAccelerometer(direction: "up" | "down") {
 		animacionDireccion = direction;
 
-		if (direction === "up") {
+		if (direction === "down") {
 			gameStore.responderCorrecto();
 		} else {
 			gameStore.pasarPregunta();
@@ -38,7 +84,7 @@
 
 	// Controles táctiles
 	function handleTactilCorrecto() {
-		animacionDireccion = "up";
+		animacionDireccion = "down";
 		gameStore.responderCorrecto();
 		setTimeout(() => {
 			animacionDireccion = null;
@@ -46,7 +92,7 @@
 	}
 
 	function handleTactilPasar() {
-		animacionDireccion = "down";
+		animacionDireccion = "up";
 		gameStore.pasarPregunta();
 		setTimeout(() => {
 			animacionDireccion = null;
@@ -55,6 +101,8 @@
 
 	// Inicializar acelerómetro
 	async function inicializarAcelerometro() {
+		if (!juegoActivo) return; // No iniciar si no ha terminado el conteo
+
 		if (!accelerometerService.esSoportado()) {
 			usarControlesTactiles = true;
 			return;
@@ -98,9 +146,13 @@
 
 	onMount(() => {
 		window.scrollTo(0, 0);
-		checkOrientation();
+		checkOrientation(); // Chequear inicial
 		window.addEventListener("resize", checkOrientation);
-		inicializarAcelerometro();
+
+		// Si ya arranca en landscape, iniciar conteo
+		if (window.innerWidth > window.innerHeight) {
+			iniciarConteo();
+		}
 	});
 
 	onDestroy(() => {
@@ -121,14 +173,6 @@
 		<!-- Pantalla de juego -->
 		<div class="game-container">
 			<!-- Header con estadísticas -->
-			<div class="game-header">
-				<div class="stat-item">
-					<Timer size={20} />
-					<span class="stat-value"
-						>{formatearTiempo(gameStore.tiempoRestante)}</span
-					>
-				</div>
-			</div>
 
 			<!-- Pregunta actual -->
 			{#if gameStore.preguntaActual}
@@ -138,7 +182,6 @@
 					class:animate-down={animacionDireccion === "down"}
 				>
 					<div class="pregunta-card card-glass">
-
 						<h2 class="pregunta-texto">
 							{gameStore.preguntaActual.texto_pregunta}
 						</h2>
@@ -153,15 +196,37 @@
 				</div>
 			{/if}
 
-			<!-- Barra de progreso -->
-			<div class="progress-container">
-				<div class="progress-bar">
-					<div
-						class="progress-fill"
-						style="width: {gameStore.porcentajeCompletado}%"
-					></div>
+						<div class="game-header">
+				<div class="stat-item">
+					<Timer size={20} />
+					<span class="stat-value"
+						>{formatearTiempo(gameStore.tiempoRestante)}</span
+					>
 				</div>
 			</div>
+
+			<!-- Overlay de Conteo Regresivo -->
+			{#if conteoRegresivo !== null}
+				<div class="countdown-overlay">
+					<div class="countdown-number">
+						{conteoRegresivo > 0 ? conteoRegresivo : "¡YA!"}
+					</div>
+					<p>¡Prepárate!</p>
+				</div>
+			{/if}
+
+			<!-- Feedback Overlays -->
+			{#if animacionDireccion === "down"}
+				<div class="feedback-overlay correct">
+					<CheckCircle size={120} />
+					<span>¡CORRECTO!</span>
+				</div>
+			{:else if animacionDireccion === "up"}
+				<div class="feedback-overlay skip">
+					<XCircle size={120} />
+					<span>PASAR</span>
+				</div>
+			{/if}
 		</div>
 	{/if}
 
@@ -201,6 +266,16 @@
 		justify-content: flex-start;
 		padding: var(--spacing-md);
 		padding-top: var(--spacing-2xl);
+		box-sizing: border-box;
+		position: relative;
+	}
+
+	.game-screen.landscape {
+		padding: var(--spacing-sm); /* Padding mínimo uniforme */
+		padding-top: 10px; /* Apenas un poco arriba */
+		height: 100vh;
+		overflow: hidden;
+		align-items: flex-start; /* Alinear todo arriba */
 	}
 
 	/* Advertencia de orientación */
@@ -222,6 +297,12 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--spacing-lg);
+		height: 100%; /* Ocupar toda la altura disponible */
+	}
+
+	.landscape .game-container {
+		gap: var(--spacing-xs); /* Espacio mínimo entre elementos */
+		justify-content: flex-start; /* Pegar todo arriba */
 	}
 
 	/* Header */
@@ -507,25 +588,153 @@
 		gap: var(--spacing-md);
 	}
 
-	@media (max-width: 768px) and (orientation: landscape) {
+	@media (max-width: 900px) and (orientation: landscape) {
 		.game-header {
-			padding: var(--spacing-sm);
+			padding: 4px var(--spacing-md); /* Header más compacto */
+			min-height: 36px;
+			margin-bottom: 0;
 		}
 
 		.stat-value {
-			font-size: 1rem;
+			font-size: 1.1rem;
+		}
+
+		.pregunta-container {
+			flex: 1;
+			display: flex;
+			align-items: center; /* Centrar verticalmente en el espacio disponible */
+			justify-content: center;
+			margin: 0;
+			padding: 0;
 		}
 
 		.pregunta-card {
-			padding: var(--spacing-lg);
+			padding: var(--spacing-md);
+			width: 100%;
+			max-height: 100%; /* Evitar que crezca más de lo necesario */
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
 		}
 
 		.pregunta-texto {
-			font-size: 1.25rem;
+			font-size: 1.25rem; /* Un poco más pequeño para asegurar visibilidad */
+			margin-bottom: var(--spacing-xs);
+			line-height: 1.2;
+		}
+
+		.respuesta-container {
+			margin-top: var(--spacing-xs);
+			padding: var(--spacing-xs);
+			background: rgba(102, 126, 234, 0.05); /* Fondo más sutil */
+		}
+
+		.respuesta-label {
+			display: none; /* Ocultar label "Respuesta" para ahorrar espacio si es necesario, o hacerlo muy chico */
 		}
 
 		.respuesta-texto {
-			font-size: 1rem;
+			font-size: 1.1rem;
+		}
+
+		.progress-container {
+			margin-top: 0;
+			margin-bottom: 0;
+			height: 4px; /* Barra más fina */
+		}
+	}
+
+	/* Countdown Overlay */
+	.countdown-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(0, 0, 0, 0.9);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		z-index: 200;
+		color: white;
+	}
+
+	.countdown-number {
+		font-size: 8rem;
+		font-weight: 900;
+		animation: pulseCount 1s infinite;
+		color: var(--color-accent-primary);
+	}
+
+	.countdown-overlay p {
+		font-size: 2rem;
+		text-transform: uppercase;
+		letter-spacing: 4px;
+	}
+
+	@keyframes pulseCount {
+		0% {
+			transform: scale(1);
+			opacity: 1;
+		}
+		50% {
+			transform: scale(1.2);
+			opacity: 0.8;
+		}
+		100% {
+			transform: scale(1);
+			opacity: 1;
+		}
+	}
+
+	/* Feedback Overlays */
+	.feedback-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: var(--spacing-lg);
+		z-index: 100;
+		pointer-events: none;
+		animation: fadeIn 0.1s ease-out;
+	}
+
+	.feedback-overlay span {
+		font-size: 3rem;
+		font-weight: 800;
+		color: white;
+		text-transform: uppercase;
+		letter-spacing: 2px;
+		text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+	}
+
+	.feedback-overlay :global(svg) {
+		color: white;
+		filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.3));
+	}
+
+	.feedback-overlay.correct {
+		background: rgba(72, 187, 120, 0.85); /* Green overlay */
+	}
+
+	.feedback-overlay.skip {
+		background: rgba(245, 101, 101, 0.85); /* Red overlay */
+	}
+
+	@keyframes fadeIn {
+		from {
+			opacity: 0;
+			transform: scale(0.9);
+		}
+		to {
+			opacity: 1;
+			transform: scale(1);
 		}
 	}
 </style>

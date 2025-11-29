@@ -3,12 +3,11 @@ import { browser } from '$app/environment';
 
 /**
  * Servicio para manejar el acelerómetro del dispositivo
- * Implementación 2024 con mejores prácticas
+ * Implementación 2024 - MODO LANDSCAPE OPTIMIZADO
  * 
  * Basado en:
  * - MDN DeviceOrientation API
- * - Web.dev best practices
- * - iOS 13+ permission requirements
+ * - Testing real en landscape con teléfono en la frente
  */
 export class AccelerometerService {
     private callback: AccelerometerCallback | null = null;
@@ -17,18 +16,20 @@ export class AccelerometerService {
     private lastTriggerTime = 0;
     private audioCtx: AudioContext | null = null;
 
-    // Configuración optimizada basada en testing real
-    private isWaitingForNeutral = false; // Nuevo: Esperar a que vuelva a posición neutral
+    // Sistema de zona neutral
+    private isWaitingForNeutral = false;
 
-    // Configuración optimizada para "Teléfono en la Frente" (Heads Up style)
-    private readonly debounceMs = 1000; // Reducido para mejor respuesta
+    // Configuración optimizada para Landscape "Heads Up"
+    private readonly debounceMs = 1000;
 
-    // Posición Neutral (Frente): ~90° (Vertical)
-    // Hacia Arriba (Correcto): < 65° (Mirando un poco al techo)
-    // Hacia Abajo (Pasar): > 100° (Mirando un poco al suelo) o Beta > 140°
-    private readonly thresholdUp = 65;
-    private readonly thresholdDown = 145;
-    private readonly gammaMax = 60; // Más flexible lateralmente
+    // UMBRALES LANDSCAPE (Teléfono en la frente, cámara trasera apuntando a la frente)
+    // Neutral: Gamma ≈ ±90°, Beta ≈ 0°
+    // PASAR (techo): Gamma < 65° (funciona perfecto)
+    // CORRECTO (suelo): Beta > 50° (espejo de PASAR)
+    private readonly thresholdGammaDown = 65;  // Para PASAR (hacia techo)
+    private readonly thresholdBetaUp = 50;     // Para CORRECTO (hacia suelo)
+    private readonly maxBetaForGamma = 55;     // Beta máximo al usar gamma
+    private readonly minGammaForBeta = 60;     // Gamma mínimo al usar beta
 
     /**
      * Obtiene o crea el contexto de audio
@@ -50,7 +51,7 @@ export class AccelerometerService {
     }
 
     /**
-     * Intenta reanudar el contexto de audio (necesario tras interacción de usuario)
+     * Intenta reanudar el contexto de audio
      */
     public async resumeAudioContext(): Promise<void> {
         const ctx = this.getAudioContext();
@@ -86,8 +87,7 @@ export class AccelerometerService {
     }
 
     /**
-     * Sonido para respuesta correcta (arriba)
-     * Arpegio Mayor Rápido (Tin-tin-tin!)
+     * Sonido para respuesta correcta
      */
     public playSoundCorrect(): void {
         if (!browser) return;
@@ -97,7 +97,7 @@ export class AccelerometerService {
             this.resumeAudioContext();
 
             const now = ctx.currentTime;
-            // C5 - E5 - G5 (Do Mayor)
+            // Arpegio Mayor C5-E5-G5
             this.playTone(ctx, 523.25, now, 0.1, 'sine');
             this.playTone(ctx, 659.25, now + 0.1, 0.1, 'sine');
             this.playTone(ctx, 783.99, now + 0.2, 0.2, 'sine');
@@ -105,8 +105,7 @@ export class AccelerometerService {
     }
 
     /**
-     * Sonido para pasar pregunta (abajo)
-     * Sonido descendente "Uh-oh"
+     * Sonido para pasar pregunta
      */
     public playSoundSkip(): void {
         if (!browser) return;
@@ -116,15 +115,14 @@ export class AccelerometerService {
             this.resumeAudioContext();
 
             const now = ctx.currentTime;
-            // G4 -> Eb4 (Intervalo menor descendente)
-            this.playTone(ctx, 392.00, now, 0.15, 'triangle'); // G4
-            this.playTone(ctx, 311.13, now + 0.15, 0.3, 'triangle'); // Eb4
+            // Sonido descendente G4->Eb4
+            this.playTone(ctx, 392.00, now, 0.15, 'triangle');
+            this.playTone(ctx, 311.13, now + 0.15, 0.3, 'triangle');
         } catch (e) { console.warn('Audio error', e); }
     }
 
     /**
-     * Sonido de fin de juego (Game Over)
-     * Secuencia de "Time's Up"
+     * Sonido de fin de juego
      */
     public playSoundGameOver(): void {
         if (!browser) return;
@@ -134,10 +132,27 @@ export class AccelerometerService {
             this.resumeAudioContext();
 
             const now = ctx.currentTime;
-            // Secuencia descendente rápida
             this.playTone(ctx, 880, now, 0.1, 'square');
             this.playTone(ctx, 698.46, now + 0.1, 0.1, 'square');
             this.playTone(ctx, 523.25, now + 0.2, 0.4, 'square');
+        } catch (e) { console.warn('Audio error', e); }
+    }
+
+    /**
+     * Sonido para cuenta regresiva
+     */
+    public playSoundCountdown(isFinal: boolean = false): void {
+        if (!browser) return;
+        try {
+            const ctx = this.getAudioContext();
+            if (!ctx) return;
+            this.resumeAudioContext();
+
+            const now = ctx.currentTime;
+            const freq = isFinal ? 880 : 440;
+            const type = isFinal ? 'square' : 'sine';
+
+            this.playTone(ctx, freq, now, 0.1, type);
         } catch (e) { console.warn('Audio error', e); }
     }
 
@@ -152,7 +167,7 @@ export class AccelerometerService {
     }
 
     /**
-     * Solicita permisos (requerido en iOS 13+)
+     * Solicita permisos (iOS 13+)
      */
     async solicitarPermisos(): Promise<boolean> {
         if (!browser) return false;
@@ -199,10 +214,10 @@ export class AccelerometerService {
         this.resumeAudioContext();
         window.addEventListener('deviceorientation', this.handleOrientation, true);
 
-        console.log('🎮 Modo "Heads Up" Iniciado');
-        console.log(`   Neutral: ~90°`);
-        console.log(`   Arriba (Correcto): < ${this.thresholdUp}°`);
-        console.log(`   Abajo (Pasar): > ${this.thresholdDown}°`);
+        console.log('🎮 Modo "Heads Up" LANDSCAPE Iniciado');
+        console.log(`   Neutral: Gamma ≈ ±90°, Beta ≈ 0°`);
+        console.log(`   PASAR (techo): Gamma < ${this.thresholdGammaDown}°`);
+        console.log(`   CORRECTO (suelo): Beta > ${this.thresholdBetaUp}°`);
     }
 
     detener(): void {
@@ -221,48 +236,47 @@ export class AccelerometerService {
         const now = Date.now();
         if (now - this.lastTriggerTime < this.debounceMs) return;
 
-        // En Landscape, el eje principal de rotación (arriba/abajo) es GAMMA
-        // Beta se mantiene cerca de 0 si el teléfono está nivelado horizontalmente
         const absGamma = Math.abs(gamma);
         const absBeta = Math.abs(beta);
 
         // Log para debug
         if (import.meta.env.DEV && now % 1000 < 50) {
-            console.log(`📱 Landscape - Gamma: ${gamma.toFixed(1)}° (Neutral: ±90), Beta: ${beta.toFixed(1)}°`);
+            console.log(`📱 G: ${gamma.toFixed(1)}° | B: ${beta.toFixed(1)}°`);
         }
 
-        // Lógica de "Zona Neutral"
-        // Esperamos a que el teléfono vuelva a estar vertical (±90°) en la frente
+        // ZONA NEUTRAL: Esperar a que vuelva a posición vertical
+        // Gamma alto (≈90°) y Beta bajo (≈0°)
         if (this.isWaitingForNeutral) {
-            if (absGamma > 70 && absGamma < 110) {
+            if (absGamma > 70 && absGamma <= 90 && absBeta < 30) {
                 this.isWaitingForNeutral = false;
-                console.log('✅ Regreso a zona neutral (Vertical)');
+                console.log('✅ Zona neutral alcanzada');
             }
             return;
         }
 
-        // DETECCIÓN DE GESTOS (Modo Landscape / Manos en extremos)
-
-        // ARRIBA / CORRECTO (Mirando al techo / Face Up)
-        // Gamma se acerca a 0° Y Beta es bajo (no está de cabeza)
-        if (absGamma < this.thresholdUp && absBeta < 45) {
+        // ⬆️ PASAR (hacia atrás/techo)
+        // Gamma DISMINUYE hacia 0°
+        // Beta se mantiene bajo
+        // ✅ ESTA CONDICIÓN YA FUNCIONA PERFECTAMENTE
+        if (absGamma < this.thresholdGammaDown && absBeta < this.maxBetaForGamma) {
             this.lastTriggerTime = now;
             this.isWaitingForNeutral = true;
-            console.log(`⬆️ CORRECTO detectado (Gamma: ${gamma.toFixed(1)}°)`);
+            console.log(`⬆️ PASAR - Gamma: ${gamma.toFixed(1)}° (< ${this.thresholdGammaDown}°)`);
 
-            this.playSoundCorrect();
+            this.playSoundSkip();
             this.vibrate(50);
             this.callback('up');
         }
-        // ABAJO / PASAR (Mirando al suelo / Face Down)
-        // Gamma se acerca a 180° O Beta se invierte (Face Down)
-        // Se añade validación (absBeta < 45) para evitar falsos positivos al mover horizontalmente
-        else if ((absGamma > this.thresholdDown && absBeta < 45) || absBeta > 165) {
+        // ⬇️ CORRECTO (hacia adelante/suelo)
+        // Beta AUMENTA significativamente
+        // Gamma se mantiene alto (cerca de 90°)
+        // ✅ NUEVA LÓGICA ESPEJO DE LA QUE FUNCIONA
+        else if (absBeta > this.thresholdBetaUp && absGamma > this.minGammaForBeta) {
             this.lastTriggerTime = now;
             this.isWaitingForNeutral = true;
-            console.log(`⬇️ PASAR detectado (Gamma: ${gamma.toFixed(1)}°, Beta: ${beta.toFixed(1)}°)`);
+            console.log(`⬇️ CORRECTO - Beta: ${beta.toFixed(1)}° (> ${this.thresholdBetaUp}°)`);
 
-            this.playSoundSkip();
+            this.playSoundCorrect();
             this.vibrate(50);
             this.callback('down');
         }
@@ -273,9 +287,10 @@ export class AccelerometerService {
             isActive: this.isActive,
             hasPermission: this.hasPermission,
             isSupported: this.esSoportado(),
-            thresholdUp: this.thresholdUp,
-            thresholdDown: this.thresholdDown,
-            gammaMax: this.gammaMax,
+            thresholdGammaDown: this.thresholdGammaDown,
+            thresholdBetaUp: this.thresholdBetaUp,
+            maxBetaForGamma: this.maxBetaForGamma,
+            minGammaForBeta: this.minGammaForBeta,
             debounceMs: this.debounceMs
         };
     }

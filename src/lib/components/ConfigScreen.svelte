@@ -219,18 +219,6 @@
 			</div>
 		</div>
 
-		<!-- Información de preguntas disponibles -->
-		<div class="preguntas-info card-glass card fade-in">
-			<div class="preguntas-stats-simple">
-				<div class="stat-simple">
-					<span class="stat-value-large"
-						>{gameStore.preguntasDisponibles.total}</span
-					>
-					<span class="stat-label">Preguntas Disponibles</span>
-				</div>
-			</div>
-		</div>
-
 		<!-- Botón de inicio -->
 		<div class="actions fade-in">
 			{#if gameStore.error}
